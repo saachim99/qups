@@ -45,7 +45,7 @@ switch "single"
                     targ = Target('pos', 1e-3*[40;10;60].*([1;0;1].*rand(3,N)-[0.5;0;0]), 'amp', rand(1,N), 'c0', 1500); % diffuse scattering
 end
 % make scatterers twice the density
-targ.scat_mode = 'ratio';
+% targ.scat_mode = 'ratio';
 % targ.rho_scat = 2; 
 targ.rho_scat = 4; 
 
