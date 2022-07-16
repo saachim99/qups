@@ -17,7 +17,13 @@ classdef TransducerArray < Transducer
             % setup the transducer args
             if nargin == 1 && isa(varargin{1}, 'struct'), varargin = struct2nvpair(varargin{1}); end
             
-            % initialize the (inherited) Transducer
+            %initialize the (inherited) Transduc 
+            % %fc = 5e6        % center frequency
+        %bw = [3.5e6 6.5e6] % bandwidth
+        %width = 1.19e-4 % width of an element (m)
+        %height = 6e-3   % height of an element (m)
+       % numel = 128     % number of elements
+       % offset er
             self@Transducer(varargin{:}) % assume we don't error on bad inputs
             
             % initialize the TransducerArray 
