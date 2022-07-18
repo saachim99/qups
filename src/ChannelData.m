@@ -123,7 +123,7 @@ classdef ChannelData < matlab.mixin.Copyable
         % cast underlying type to double
         function chd = singleT(chd) , chd = applyFun2Data (chd, @single); end
         % cast underlying type to single
-        function chd =   halfT(chd) , chd = applyFun2Data (chd, @half); end
+        function chd =   halfT(chd) , chd = applyFun2Data (chd, @halfT); end
         % cast underlying type to half
         function chd =  int64T(chd) , chd = applyFun2Data (chd, @int64); end
         % cast underlying type to int64
@@ -662,7 +662,8 @@ classdef ChannelData < matlab.mixin.Copyable
 
             % choose to show real part or dB magnitude
             if isnumeric(d), d = double(d); end % cast integer types for abs, half types for imagesc
-            if ~isreal(d), d = mod2db(d); end
+            d = squeeze(double(d)); % make friendly to imagesc
+            if ~isreal(d), d = mod2db(d); end % assume complex data should be shown in dB
 
             % get the time axes for this frame
             t = gather(double(sub(self.time, num2cell(it), fdims)));
@@ -820,7 +821,7 @@ classdef ChannelData < matlab.mixin.Copyable
             if all(chd.t0 == sub(chd.t0,1,dim),'all'), chd.t0 = sub(chd.t0,1,dim); end % simplify for identical t0
 
         end
-        function [chds, ix]= splice(chd, dim, bsize)
+        function [chds, ix] = splice(chd, dim, bsize)
             % SPLICE - Split the ChannelData into an array of ChannelDatas
             % 
             % chds = SPLICE(chd, dim) returns an array of ChannelData
@@ -877,9 +878,16 @@ classdef ChannelData < matlab.mixin.Copyable
             if ~iscell(ind), ind = {ind}; end % enforce cell syntax
             tind = ind; % separate copy for the time indices
             tind(size(chd.time,dim) == 1) = {1}; % set singleton
-            if any(dim == chd.tdim), t = chd.time; else, t = chd.t0; end % index in time if necessary
+            has_tdim = any(dim == chd.tdim);
+            if has_tdim, 
+                n = tind{dim == chd.tdim}; % get the time indices
+                assert(issorted(n, 'strictascend') && all(n == round(n)), ... % check the index in time is sorted, continous
+                    'The temporal index must be a strictly increasing set of indices.');
+            end
+            if has_tdim, t = chd.time; else, t = chd.t0; end % index in time if necessary
             t0_   = sub(t, tind, dim); % extract
             data_ = sub(chd.data, ind, dim); % extract
+            if has_tdim, t0_ = sub(t0_, 1, chd.tdim); end % extract only the first value in time
             
             chd = copy(chd); % copy semantics
             chd.t0 = t0_; % assign
