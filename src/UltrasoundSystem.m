@@ -1909,6 +1909,9 @@ classdef UltrasoundSystem < handle
             txne = ceil ((txsig.tend + max(del(:))) * fs_); % maximum time sample - must pass through 0
             t_tx = shiftdim((txn0 : txne)' / fs_, -2); % time indices (1x1xT)
             txsamp = permute(apod .* txsig.sample(t_tx - del), [3,1,2]); % transmit waveform (T x M x V)
+
+            disp(size(kgrid));
+            disp(size(real(permute(txsamp, [2,1,3]))));
             
             % assign source for each transmission
             psig = karray.getDistributedSourceSignal(kgrid, real(permute(txsamp, [2,1,3]))); % create this pressure function
