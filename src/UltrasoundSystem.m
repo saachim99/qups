@@ -2797,6 +2797,90 @@ classdef UltrasoundSystem < handle
             % if isvalid(hw), close(hw); end % close if not closed
             if ~sumtx, b = cat(D+3, bm{:}); end % combine all transmits
         end
+    
+        function b = bfWavefieldCorrelation(self, chd, medium, cscan, varargin)
+            % we assert that this is one transducer
+            assert(self.tx == self.rx);
+            xdc = self.xdc; 
+
+
+            % defaults
+            kwargs.aawin = 1;
+            kwargs.dov = 45e-3; % Max Depth [m]
+            kwargs.no_elements = size(xdc.postions(),1);
+            kwargs.dBrange = [-40, 0]; % Image dynamic range
+            kwargs.reg = 1e-2; % time gain compensation parameters
+            kwargs.gpu = true;
+            kwargs.version = 2;
+            kwargs.plot = true;
+            kwargs.plot_updates = false;
+            
+            % parse inputs
+            for i = 1:2:numel(varargin), kwargs.(varargin{i}) = varargin{i+1}; end
+            
+            % anti-aliasing window
+            aawin = kwargs.aawin;
+
+            % get the transducer
+            %xdc = self.xdc; 
+            rxAptPos = xdc.postions();
+            no_elements = xdc.numel;
+            pitch = xdc.pitch;
+            xpos = rxAptPos(:,1);
+            no_rx_elemets = numel(xpos);
+
+
+            % Pick off Specific Transmitters
+            tx_elmts = 1:1:kwargs.no_elements;
+
+            %get speed of sound data
+            Crecon = Medium.c0;
+
+            % get the receive data
+            %rxdata_h = chd.data;
+            scat = chd.data;
+            [nT, nRx, nTx]= size(scat);
+            scat_h = reshape(hilbert(reshape(scat,[nT,nRx*nTx])),[nT,nRx,nTx]);
+            time = chd.time;
+            fs = chd.fs; %#ok<PROPLC> 
+
+            % get the simulation mediaum and it's axis
+            x = cscan.x;
+            z = cscan.z;
+            [Xg, ~, Zg] = cscan.getImagingGrid();
+            c_x_z = props(medium, cscan, 'c');
+
+            assert(min(Z) <= 0, "Sound speed map must contain depth 0. Given minimum depth of %0.2fmm", 1e3*min(Z));
+            
+            % find limits of the definied region
+            x_nan = isnan(c_x_z(1,:));
+            x_nanl = x_nan & (x < 0);
+            x_nanr = x_nan & (x > 0);
+            interior_idxlr = find(~x_nan);
+
+            % replicate the left/right boundaries
+            c_left  = c_x_z(:, interior_idxlr(1));
+            c_right = c_x_z(:, interior_idxlr(end));
+            c_x_z(:, x_nanl) = repmat(c_left , [1, sum(x_nanl)]);
+            c_x_z(:, x_nanr) = repmat(c_right, [1, sum(x_nanr)]);
+
+            % get the imaging scan
+            scan = self.scan;
+
+            %
+
+            % get the transmit delays and apodization
+            % (M is the transmit aperture, V is each transmit)
+            delay  = self.sequence.delays(self.tx); % M x V
+            apod = self.sequence.apodization(self.tx); % M x V
+
+
+            ...
+
+            % get the data
+            b = img;
+
+        end
     end
     
     % Receive Aperture beamforming methods: operate along rx dimension
