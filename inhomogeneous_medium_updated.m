@@ -196,7 +196,7 @@ end
 % Construct an UltrasoundSystem object, combining all of these properties,
 % adn setting the sampling frequency of the output data
 us = UltrasoundSystem('xdc', xdc, 'sequence', seq, 'scan', scan, 'fs', 40e6);
-
+chd0;
 % Preferably, we use a parcluster to compute on - this makes it easy to
 % send sims to the cluster
 opts_clu = ["local", "Starling-GPU","Starling-CPU"];
@@ -237,7 +237,7 @@ end
 end
 
 %% display the channel data across the transmits
-chd0
+
 chd = mod2db(chd0); % == 20*log10(abs(x)) -> the power of the signl in decibels
 figure; h = imagesc(chd, 1); colormap jet; colorbar; caxis(gather([-80 0] + (max(chd.data(chd.data < inf)))))
 xlabel('Channel'); ylabel('Time (s)'); ylim([min(chd.time(:)), max(chd.time(:))]);
