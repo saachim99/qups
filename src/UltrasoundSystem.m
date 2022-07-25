@@ -1863,37 +1863,45 @@ classdef UltrasoundSystem < handle
 
     % k-Wave calls (new)
     methods
-        function chd = kspaceFirstOrder(self, target, sscan, varargin)
+        function [chd, job, readfun] = kspaceFirstOrder(self, target, sscan, varargin)
             % KSPACEFIRSTORDERND - Simulate channel data via k-Wave
             % 
             % chd = KSPACEFIRSTORDERND(self, target) simulates the Target
             % target and returns a ChannelData object chd via k-Wave.
             %
-            % chd = KSPACEFIRSTORDERND(self, target, element_subdivisions)
-            % uses the 1x2 array of element_subdivisions to subdivide the
-            % elements prior to placing them on the simulation grid.
+            % chd = KSPACEFIRSTORDERND(self, target, sscan) operates using
+            % the simulation region defined by the ScanCartesian sscan. The
+            % step sizes in all dimensions must be identical for results to
+            % be valid.
             %
-            % [chd, cgrid] = kspaceFirstOrderND(...) also returns a
-            % structure with the coordinate transforms from the kWaveGrid. 
-            % This behaviour is likely to be deprecated
+            % [chd, job, readfun] = kspaceFirstOrderND(...) also returns
+            % a parallel.Job job and a function readfun to read the output 
+            % of the Job into a ChannelData object. If these outputs are
+            % requested, chd is empty and the job is not submitted. The job
+            % can be submitted with the submit function. When the job has
+            % completed, it can be read into a ChannelData object with
+            % readfun.
             %
-            % chd = KSPACEFIRSTORDERND(self, target, element_subdivisions, 
-            % Name, Value, ... ) specifies name value pairs.
+            % [...] = KSPACEFIRSTORDERND(self, target, sscan, Name, Value, ...)
+            % specifies name value pairs.
             %
             % Inputs:
-            %     PML_min - minimum (one-sided) PML size
-            %     PML_max - maximum (one-sided) PML size
+            %     T - time limit of the simulation 
+            %     PML - upper and lower bound on the PML size
             %     CFL_max - maximum cfl number (for stability)
-            %     buffer - x/y/z computational buffer (3 x 2)
-            %     resolution_ratio - grid resolution as proportion of wavelength
-            %     dims - dimensionality of the simulation (one of {2*,3})
             %     parcluster - parallel cluster for running simulations (use 0 for no cluster)
-            %     bounds - minimum boundaries of the sim (3 x 2)
+            %     ElemMapMethod - computational method for mapping elements to the grid. 
+            %           Must be one of 
+            %          {'nearest*, 'karray-direct', 'karray-depend'}. The
+            %          'nearest' method uses the nearest pixel. The 
+            %           'karray-direct' method uses the karray method but 
+            %           avoids recomputing intermediate results. The 
+            %           'karray-depend' method always uses the kWaveArray 
+            %           methods, but can be slower. 
             %
-            % Other Name/Value pairs that are valid for kWave's
-            % kspaceFirstOrderND functions are valid here with the
-            % exception of the PML definition
-            %
+            % Other Name/Value pairs that are valid for kWaveArray's 
+            % constructor or kWave's kspaceFirstOrderND functions are 
+            % valid here except for PML definition arguments.
             %
             % See also ULTRASOUNDSYSTEM/FULLWAVESIM
 
@@ -1904,9 +1912,10 @@ classdef UltrasoundSystem < handle
                 'PML', [20 56], ... (one-sided) PML size range
                 'CFL_max', 0.25, ... maximum cfl number (for stability)
                 'parcluster', 0, ... parallel cluster for running simulations (use 0 for no cluster)
-                'BLITolerance', 0.05, ...
-                'BLIType', 'sync', ... stencil - exact or sync
+                'ElemMapMethod', 'nearest', ... one of {'nearest*,'karray-direct', 'karray-depend'}
                 'UpsamplingRate', 10, ...
+                'BLITolerance', 0.05, ...
+                'BLIType', 'sinc', ... stencil - exact or sinc
                 'DataCast', 'gpuArray-single',...
                 'DataRecast', false, ...
                 'LogScale', false, ...
@@ -1923,14 +1932,19 @@ classdef UltrasoundSystem < handle
             % store NV pair arguments into kwargs
             for i = 1:2:numel(varargin), kwargs.(varargin{i}) = varargin{i+1}; end
 
+            % intialize empty outputs
+            [chd, job, readfun] = deal([]);
+
             % get the kWaveGrid
+            % TODO: check that the stpe sizes are all equal - this is
+            % required by kWaveArray
             [kgrid, Npml]= getkWaveGrid(sscan, 'PML', kwargs.PML);
 
             % get the kWave medium struct
             kmedium = getMediumKWave(target, sscan);
 
             % get the minimum necessary time step from the CFL
-            dt_cfl_max = kwargs.CFL_max * min([sscan.dx, sscan.dz, sscan.dy]) / max(kmedium.sound_speed,[],'all');
+            dt_cfl_max = kwargs.CFL_max * min([sscan.dz, sscan.dx, sscan.dy]) / max(kmedium.sound_speed,[],'all');
             
             % use a time step that aligns with the sampling frequency
             dt_us = inv(self.fs);
@@ -1949,20 +1963,6 @@ classdef UltrasoundSystem < handle
             % kgrid to sscan coordinate translation mapping
             kgrid_origin = cellfun(@median, {sscan.z, sscan.x, sscan.y});
 
-            % define the sensor on the grid
-            % el_sub_div = [4,16]; % heuristic: should be generally enough to sample on the grid
-            % [ksensor_rx, ksensor_ind, sens_map] = self.rx.getKWaveSensor(kgrid, kgrid_origin, el_sub_div);
-            karray_opts = {'BLITolerance', kwargs.BLITolerance, 'UpsamplingRate', kwargs.UpsamplingRate};
-            karray = kWaveArray(self.rx, kgrid.dim, kgrid_origin, karray_opts{:});
-            ksensor.mask = karray.getArrayBinaryMask(kgrid);
-            % ksensor.record = {'p'}; % record the pressure
-            % ksensor.record = {'u_non_staggered'}; % record the particle velocity
-            ksensor.record = {'u'}; % record the original particle velocity
-            % ksensor.record = {'u','u_non_staggered', 'p'}; % record whatever, I'm lost
-
-            % define the source signal(s) for each transmit in the pulse sequence
-            % [ksource, t_sig, sig] = self.getKWaveSource(kgrid, kgrid_origin, el_sub_div, target.c0);
-            
             % get the source signal
             txsig = conv(self.tx.impulse, self.sequence.pulse, 4*fs_); % transmit waveform, 4x intermediate convolution sampling
             apod =  self.sequence.apodization(self.tx); % transmit apodization (M x V)
@@ -1975,16 +1975,61 @@ classdef UltrasoundSystem < handle
             disp(size(kgrid));
             disp(size(real(permute(txsamp, [2,1,3]))));
             
-            % assign source for each transmission
-            psig = karray.getDistributedSourceSignal(kgrid, real(permute(txsamp, [2,1,3]))); % create this pressure function
-            % for v = self.sequence.numPulse:-1:1, ksource(v).p = sub(psig,v,3); end
-            % [ksource.p_mask] = deal(karray.getArrayBinaryMask(kgrid));
-            for v = self.sequence.numPulse:-1:1, ksource(v).ux = sub(psig,v,3); end
-            [ksource.u_mask] = deal(karray.getArrayBinaryMask(kgrid));
-            
+            % define the sensor on the grid 
+            % generate {psig, mask, elem_weights, elem_norm}
+            switch kwargs.ElemMapMethod
+                case 'nearest'
+                    pg = sscan.getImagingGrid(); % grid points {x, y, z}
+                    pg = cell2mat(cellfun(@(x)shiftdim(x,-1), pg(:), 'UniformOutput',false)); % -> 3 x Z x X x Y
+                    pn = self.rx.positions; % element positions
+                    [Nx, Ny, Nz] = dealfun(@(n) n + (n==0), kgrid.Nx, kgrid.Ny, kgrid.Nz); % kwave sizing
+                    mask = false(Nx, Ny, Nz); % grid size
+                    assert(all(size(mask,1:3) == sscan.size), 'kWave mask and sacn size do not correspond.');
+                    for n = self.rx.numel:-1:1, % get nearest pixel for each element
+                        ind(n) = argmin(vecnorm(pn(:,n) - pg,2,1),[],'all', 'linear');
+                    end
+                    mask(ind) = true;
+                    psig = permute(txsamp,[2,1,3]); % -> (J' x T' x V) with M == J'
+
+                case {'karray-direct', 'karray-depend'}
+                    % [ksensor_rx, ksensor_ind, sens_map] = self.rx.getKWaveSensor(kgrid, kgrid_origin, el_sub_div);
+                    karray_opts = {'BLITolerance', kwargs.BLITolerance, 'UpsamplingRate', kwargs.UpsamplingRate, 'BLIType', kwargs.BLIType};
+                    karray = kWaveArray(self.rx, kgrid.dim, kgrid_origin, karray_opts{:});
+                    mask = karray.getArrayBinaryMask(kgrid);
+
+                    % assign source for each transmission (J' x T' x V)
+                    % TODO: abstract this logic to come from transducer directly so
+                    % it can be used in fullwave or some other FDTD method
+                    switch kwargs.ElemMapMethod
+                        case 'karray-direct'
+                            % get the offgrid source weights
+                            elem_weights = arrayfun(@(i){sparse(vec(karray.getElementGridWeights(kgrid, i)))}, 1:self.xdc.numel);  % (J x {M})
+                            elem_weights = cat(2, elem_weights{:}); % (J x M)
+                            elem_weights = elem_weights(mask(:),:); % (J' x M)
+                            psig = pagemtimes(full(elem_weights), 'none', real(txsamp), 'transpose'); % (J' x M) x (T' x M x V) -> (J' x T' x V)
+
+                            % get the offgrid source sizes
+                            elem_meas = arrayfun(@(i)karray.elements{i}.measure, 1:self.xdc.numel);
+                            elem_dim  = arrayfun(@(i)karray.elements{i}.dim    , 1:self.xdc.numel);
+                            elem_norm = elem_meas ./ (kgrid.dx) .^ elem_dim; % normalization factor
+
+                        case 'karray-depend', % compute one at a time and apply casting rules
+                            psig = cellfun(@(x) ...
+                                {cast(karray.getDistributedSourceSignal(kgrid, x.'), 'like', x)}, ...
+                                num2cell(real(txsamp), [1,2]) ...
+                                );
+                            psig = cat(3, psig);
+                    end
+            end
+
+            % define the source and sensor
+            ksensor.mask = mask; % pixels to record
+            ksensor.record = {'u'}; % record the original particle velocity
+            % ksensor.record = {'u','u_non_staggered', 'p'}; % record everything
+            for v = self.sequence.numPulse:-1:1, ksource(v).ux = sub(psig,v,3); end % set transmit pulses
+            [ksource.u_mask] = deal(mask); % set transmit aperture mask
 
             % set the total simulation time: default to a single round trip at ambient speed
-            % TODO: make the end time an optional input argument
             if isempty(kwargs.T)
                 kwargs.T = 2 * (vecnorm(range([sscan.xb; sscan.yb; sscan.zb], 2),2,1) ./ target.c0);
                 %kwargs.T = 1.25 * (vecnorm(range([sscan.xb; sscan.yb; sscan.zb], 2),2,1) ./ target.c0);
@@ -2000,7 +2045,7 @@ classdef UltrasoundSystem < handle
                 kgrid.total_grid_points, kgrid.total_grid_points*4/2^20);
 
             % strip all other arguments from input
-            nonkwfields = {'T', 'PML','CFL_max', 'parcluster', ... % not kWave args
+            nonkwfields = {'T', 'PML','CFL_max', 'parcluster', 'ElemMapMethod', ... % not kWave args
                  'BLIType', 'BLITolerance','UpsamplingRate',  ... % not kspaceFirstOrder args
                 }; 
             kwave_args = rmfield(kwargs, nonkwfields); % forward all others
@@ -2025,48 +2070,97 @@ classdef UltrasoundSystem < handle
             % get all arguments
             kwave_args_ = arrayfun(...
                 @(pulse) struct2nvpair(kwave_args(pulse)), ...
-                1:self.sequence.numPulse, ...
+                1:self.sequence.numPulse, ... 
                 'UniformOutput', false ...
                 );
 
-            out = cell(self.sequence.numPulse, 1);
-            [Np] = deal(self.sequence.numPulse); % splice
-            % for puls = self.sequence.numPulse:-1:1
-            parfor (puls = 1:self.sequence.numPulse, kwargs.parcluster)
-                % TODO: make this part of some 'info' logger or something
-                fprintf('\nComputing pulse %i of %i\n', puls, Np);
-                tt_pulse = tic;
-
-                % simulate
-                sensor_data = kspaceFirstOrderND_(kgrid, kmedium, ksource(puls), ksensor, kwave_args_{puls}{:}); %#ok<PFBNS>
-
-                % Process the simulation data
-                % x = sensor_data.p;
-                % x = sensor_data.ux_non_staggered;
-                x = sensor_data.ux; % get the axial velocity
-                
-                % get sensor data, enforce on CPU (T x N)
-                out{puls}  = gather(karray.combineSensorData(kgrid, x)).'; %#ok<PFBNS> karray is small (~200KB)
-
-                % report timing % TODO: make this part of some 'info' logger or something
-                fprintf('\nFinished pulse %i of %i\n', puls, Np);
-                toc(tt_pulse)
+            % processing step: get sensor data, enforce on CPU (T x N)
+            switch kwargs.ElemMapMethod
+                case 'karray-depend'
+                    proc_fun = @(x) gather(karray.combineSensorData(kgrid, x.ux)).';
+                case {'karray-direct'}
+                    proc_fun = @(x) gather(x.ux.' * full(elem_weights ./ elem_norm)); % (J' x T)' x (J' x N) -> T x N
+                case {'nearest'}
+                    proc_fun = @(x) gather(x.ux.'); % -> (T' x N) 
+                otherwise, warning('Unrecognized mapping option - mapping to grid pixels by default.');
+                    proc_fun = @(x) gather(x.ux.');
             end
 
-            
-            % create ChannelData objects
-            chd = cellfun(@(x) ChannelData('data', x, 't0', t_tx(1), 'fs', fs_), out(:,1));
-            chd = join(chd, 3); % concatenate over transmits
+            % get the receive impulse response function
+            rx_imp = self.rx.impulse;
+            t_rx = rx_imp.getSampleTimes(fs_);
+            rx_sig = gather(real(rx_imp.sample(t_rx(:))));
 
-            % convolve with receive impulse response function
-            rx_imp = self.rx.impulse; 
-            t_rx = rx_imp.getSampleTimes(self.fs);
-            chd.data = convn(chd.data, real(rx_imp.sample(t_rx(:))), 'full');
-            chd.t0 = chd.t0 + t_rx(1); % adjust time axes for receive convolution
+            % simulation start time
+            t0 = gather(t_tx(1) + t_rx(1));
 
-            % TODO: make reports optional
-            fprintf(string(self.sequence.type) + " k-Wave simulation completed in %0.3f seconds.\n", toc(tt_kwave));
+            % TODO: provide more options to toggle between cluster job and
+            % parfor behaviour - for now, only parcluster == 0 -> parfor
+            switch kwargs.parcluster
+                case 0 % process directly in a parfor loop if 0
+                     out = cell(self.sequence.numPulse, 1); % init
+                    [Np] = deal(self.sequence.numPulse); % splice
 
+                   % for puls = self.sequence.numPulse:-1:1
+                    parfor (puls = 1:self.sequence.numPulse, kwargs.parcluster)
+                        % TODO: make this part of some 'info' logger or something
+                        fprintf('\nComputing pulse %i of %i\n', puls, Np);
+                        tt_pulse = tic;
+
+                        % simulate
+                        sensor_data = kspaceFirstOrderND_(kgrid, kmedium, ksource(puls), ksensor, kwave_args_{puls}{:}); %#ok<PFBNS>
+
+                        % Process the simulation data
+                        out{puls} = proc_fun(sensor_data); %#ok<PFBNS> data is small 
+
+                        % report timing % TODO: make this part of some 'info' logger or something
+                        fprintf('\nFinished pulse %i of %i\n', puls, Np);
+                        toc(tt_pulse)
+                    end
+
+                    % create ChannelData objects
+                    x = convn(cat(3, out{:}), rx_sig, 'full'); % convolve with receive impulse response
+                    chd = ChannelData('data', x, 't0', t0, 'fs', fs_);
+
+                    % TODO: make reports optional
+                    fprintf(string(self.sequence.type) + " k-Wave simulation completed in %0.3f seconds.\n", toc(tt_kwave));
+
+                otherwise
+                    % make a job on the cluster
+                    clu = kwargs.parcluster;
+                    job = createJob(clu, 'AutoAddClientPath', true, 'AutoAttachFiles',true);
+
+                    % arguments for each simulation
+                    parfor (puls = 1:self.sequence.numPulse, 0)
+                        kargs_sim{puls} = [...
+                            {kgrid, kmedium, ksource(puls), ksensor}, ...
+                            kwave_args_{puls}(:)'...
+                            ];
+                    end
+
+                    % add simulation and processing task
+                    job.createTask(@(varargin) proc_fun(kspaceFirstOrderND_(varargin{:})), 1, kargs_sim);
+
+                    % function to read into a ChannelData object
+                    % reshape and convole with receive impulse-response
+                    % we can make this a lambda because we only
+                    % have one output per task
+                    readfun = @(job) ... 
+                        ChannelData('t0', t0, 'fs', fs_, 'data', ... 
+                        convn(cell2mat(cat(3, job.Tasks.OutputArguments)), rx_sig, 'full') ... 
+                        );
+
+                    % if no job output was requested, run the job and
+                    % create the ChannelData
+                    if nargout < 2, 
+                        submit(job); 
+                        wait(job);
+                        chd = readfun(job);
+
+                        % TODO: make reports optional
+                        fprintf(string(self.sequence.type) + " k-Wave simulation completed in %0.3f seconds.\n", toc(tt_kwave));
+                    end
+            end
         end
     end
     
