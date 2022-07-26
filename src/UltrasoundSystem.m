@@ -1927,7 +1927,8 @@ classdef UltrasoundSystem < handle
                 ...'DisplayMask', 'off', ...
                 'RecordMovie', false, ...
                 'Smooth', true, ...
-                'czarray', [] ...
+                'czarray', [], ...
+                'arrayofimp',[] ...
                 );
 
             % store NV pair arguments into kwargs
@@ -2085,7 +2086,7 @@ classdef UltrasoundSystem < handle
 
             % strip all other arguments from input
             nonkwfields = {'T', 'PML','CFL_max', 'parcluster', 'ElemMapMethod', 'el_sub_div', ... % not kWave args
-                 'BLIType', 'BLITolerance','UpsamplingRate',  ... % not kspaceFirstOrder args
+                 'BLIType', 'BLITolerance','UpsamplingRate', 'czarray','arrayofimp' ... % not kspaceFirstOrder args
                 }; 
             kwave_args = rmfield(kwargs, nonkwfields); % forward all others
             
@@ -3144,26 +3145,26 @@ classdef UltrasoundSystem < handle
 
             % get the transmit delays and apodization
             % (M is the transmit aperture, V is each transmit)
-            %delay  = self.sequence.delays(self.tx); % M x V
-            %apod = self.sequence.apodization(self.tx); % M x V
+            delay  = self.sequence.delays(self.tx); % M x V
+            apod = self.sequence.apodization(self.tx); % M x V
             %disp(size(apod))
             %disp(size(xpos))
             %delay= self.sequence.dealays(self.tx);
 
- %           M = size(delay,1);
-  %          V = size(delay,2);
-   %         delay = reshape(delay,M,V,1);
-    %        delay = permute(delay, [1,3,2]);
+            M = size(delay,1);
+            V = size(delay,2);
+            delay = reshape(delay,M,V,1);
+            delay = permute(delay, [1,3,2]);
             
-     %       MA = size(apod,1);
-      %      VA = size(apod,2);
-       %     apod = reshape(apod, MA,VA,1);
-        %    apod = permute(apod, [1,3,2]);
+            MA = size(apod,1);
+            VA = size(apod,2);
+            apod = reshape(apod, MA,VA,1);
+            apod = permute(apod, [1,3,2]);
 
             
             %delayre = reshape(delay, )
-            apod = permute(eye(no_rx_elements), [1,3,2]); % N x 1 x N
-            delay = permute(zeros(no_rx_elements), [1,3,2]); % N x 1 x N
+            %apod = permute(eye(no_rx_elements), [1,3,2]); % N x 1 x N
+            %delay = permute(zeros(no_rx_elements), [1,3,2]); % N x 1 x N
             apod_x     = interp1(xpos, apod (:,:,tx_elmts), vec(x), 'nearest', 0); % X x 1 x M
             delayIdeal = interp1(xpos, delay(:,:,tx_elmts), vec(x), 'nearest', 0); % X x 1 x M
             txdata_f = (apod_x.*P_Tx_f).*exp(-1i*2*pi*delayIdeal.*f); % X x F x M

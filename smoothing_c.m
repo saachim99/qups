@@ -1,4 +1,4 @@
-function [bigarray] = smoothing_c(arraycz,n,w)
+function [bigarray,bigarrayimp] = smoothing_c(arraycz,n,w,arrayofimps)
 %SMOOTHING FUNCTION Summary of this function goes here
 %   Detailed explanation goes here
 numc = length(arraycz);
@@ -7,13 +7,17 @@ disp(n);
 alength = ((numc-1)*n)+numc;
 disp(alength);
 bigarray = zeros(alength,2);
+bigarrayimp = zeros(alength,1);
 index = 1;
 for i = 1:numc-1
     c1 = arraycz(i,1);
+    imp1 = arrayofimps(i,1);
     z1 = arraycz(i,2);
     c2 = arraycz(i+1,1);
+    imp2 = arrayofimps(i+1,1);
     z2 = arraycz(i+1,2);
     cs = linspace(c1,c2,n+2);
+    imps = linspace(imp1,imp2,n+2);
     %disp(cs)
     %disp(z1);
     %zs = linspace(z1,z2,n);
@@ -27,6 +31,7 @@ for i = 1:numc-1
     zn = z1;
     
     bigarray(index,:) = [c1,z1];
+    bigarrayimp(index,:)= imp1;
     index = index+1;
     %for j = n:-1:1
     for k = 1:n
@@ -35,6 +40,7 @@ for i = 1:numc-1
         %disp(zn);
         %disp(index);
         bigarray(index,:)=[cs(k+1), zn];
+        bigarrayimp(index) = imps(k+1);
         index = index+1;
     end
 end

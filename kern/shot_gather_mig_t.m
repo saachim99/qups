@@ -13,8 +13,8 @@ end
 
 % Verify the Number of Common Shot Gathers
 ns =  size(txdata_f, 3); 
-assert(size(rxdata_f, 3) == ns, ...
-    'Number of sources must equal to number of common-source gathers');
+%assert(size(rxdata_f, 3) == ns, ...
+%    'Number of sources must equal to number of common-source gathers');
 AAwin = cast(aawin(:), 'like', rxdata_f);
 
 % Forward and Inverse Fourier Transforms with Anti-Aliasing Windows
