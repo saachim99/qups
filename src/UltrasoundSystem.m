@@ -1926,7 +1926,9 @@ classdef UltrasoundSystem < handle
                 'PlotScale', 'auto', ...
                 ...'DisplayMask', 'off', ...
                 'RecordMovie', false, ...
-                'Smooth', true ...
+                'Smooth', true, ...
+                'czarray', [], ...
+                'arrayofimp',[] ...
                 );
 
             % store NV pair arguments into kwargs
@@ -1982,6 +1984,9 @@ classdef UltrasoundSystem < handle
             txne = ceil ((txsig.tend + max(del(:))) * fs_); % maximum time sample - must pass through 0
             t_tx = shiftdim((txn0 : txne)' / fs_, -2); % transmit signal time indices (1x1xT')
             txsamp = permute(apod .* txsig.sample(t_tx - del), [3,1,2]); % transmit waveform (T' x M x V)
+
+            disp(size(kgrid));
+            disp(size(real(permute(txsamp, [2,1,3]))));
             
             % define the sensor on the grid 
             % generate {psig, mask, elem_weights}
@@ -2058,7 +2063,11 @@ classdef UltrasoundSystem < handle
 
             % set the total simulation time: default to a single round trip at ambient speed
             if isempty(kwargs.T)
+                %c = props(target, sscan, 'c'); % Z x X x Y
+                %dz = sscan.dz; 
                 kwargs.T = 2 * (vecnorm(range([sscan.xb; sscan.yb; sscan.zb], 2),2,1) ./ target.c0);
+                %kwargs.T = 1.25 * (vecnorm(range([sscan.xb; sscan.yb; sscan.zb], 2),2,1) ./ target.c0);
+
             end
             Nt = 1 + floor((kwargs.T / kgrid.dt) + max(range(t_tx,1))); % number of steps in time
             kgrid.setTime(Nt, kgrid.dt);
@@ -2079,7 +2088,7 @@ classdef UltrasoundSystem < handle
 
             % strip all other arguments from input
             nonkwfields = {'T', 'PML','CFL_max', 'parcluster', 'ElemMapMethod', 'el_sub_div', ... % not kWave args
-                 'BLIType', 'BLITolerance','UpsamplingRate',  ... % not kspaceFirstOrder args
+                 'BLIType', 'BLITolerance','UpsamplingRate', 'czarray','arrayofimp' ... % not kspaceFirstOrder args
                 }; 
             kwave_args = rmfield(kwargs, nonkwfields); % forward all others
             
@@ -2143,9 +2152,16 @@ classdef UltrasoundSystem < handle
                         % TODO: make this part of some 'info' logger or something
                         fprintf('\nComputing pulse %i of %i\n', puls, Np);
                         tt_pulse = tic;
+                        disp('check');
+                        disp(ksource(puls));
+                        disp('check 2');
+                        %disp(kwave_args_{puls}{:});
+                        disp('iso');
+                        disp(kmedium_iso);
 
                         % simulate
                         sensor_data     = kspaceFirstOrderND_(kgrid, kmedium    , ksource(puls), ksensor, kwave_args_{puls}{:}); %#ok<PFBNS>
+                        disp('sensordatadone');
                         sensor_data_iso = kspaceFirstOrderND_(kgrid, kmedium_iso, ksource(puls), ksensor, kwave_args_{puls}{:}); 
 
                         % Process the simulation data
@@ -3031,6 +3047,163 @@ classdef UltrasoundSystem < handle
             end
             % if isvalid(hw), close(hw); end % close if not closed
             if ~sumtx, b = cat(D+3, bm{:}); end % combine all transmits
+        end
+    
+        function b = bfWavefieldCorrelation(self, chd, medium, cscan, varargin)
+            % we assert that this is one transducer
+            assert(self.tx == self.rx);
+            xdc = self.xdc; 
+
+
+            % defaults
+            kwargs.aawin = 1;
+            kwargs.dov = 45e-3; % Max Depth [m]
+            kwargs.no_elements = xdc.numel;
+            kwargs.dBrange = [-40, 0]; % Image dynamic range
+            kwargs.reg = 1e-2; % time gain compensation parameters
+            kwargs.gpu = true;
+            kwargs.version = 2;
+            kwargs.plot = true;
+            kwargs.plot_updates = false;
+            
+            % parse inputs
+            for i = 1:2:numel(varargin), kwargs.(varargin{i}) = varargin{i+1}; end
+            
+            % anti-aliasing window
+            aawin = kwargs.aawin;
+
+            % get the transducer
+            %xdc = self.xdc; 
+            rxAptPos = xdc.positions();
+            %disp(size(rxAptPos))
+            no_elements = xdc.numel;
+            pitch = xdc.pitch;
+            xpos = rxAptPos(1,:);
+            xpos = xpos';
+            %disp(xpos)
+            no_rx_elements = numel(xpos);
+
+
+            % Pick off Specific Transmitters
+            tx_elmts = 1:1:kwargs.no_elements;
+
+            %get speed of sound data
+            Crecon = medium.c0;
+
+            % get the receive data
+            %rxdata_h = chd.data;
+            scat = chd.data;
+            [nT, nRx, nTx]= size(scat);
+
+            %sm addition:
+            disp(size(tx_elmts));
+            %disp(size(scat,3));
+            if size(tx_elmts,2)>size(scat,3)
+                rxdata_h = scat;
+               
+                tx_elmts = size(scat,3);
+                disp('here')
+            else 
+                rxdata_h = scat(:,:,tx_elmts);
+                disp('no here');
+            end
+
+            %scat_h = reshape(hilbert(reshape(scat,[nT,nRx*nTx])),[nT,nRx,nTx]);
+            time = chd.time;
+            fs = chd.fs; %#ok<PROPLC> 
+            nt = numel(time);
+            f = (fs/2)*(-1:2/nt:1-2/nt); % Hz
+
+
+            % get the simulation mediaum and it's axis
+            x = cscan.x;
+            z = cscan.z;
+            [Xg, ~, Zg] = cscan.getImagingGrid();
+            c_x_z = props(medium, cscan, 'c');
+
+            %assert(min(Z) <= 0, "Sound speed map must contain depth 0. Given minimum depth of %0.2fmm", 1e3*min(Z));
+            
+            % find limits of the definied region
+            x_nan = isnan(c_x_z(1,:));
+            x_nanl = x_nan & (x < 0);
+            x_nanr = x_nan & (x > 0);
+            interior_idxlr = find(~x_nan);
+
+            % replicate the left/right boundaries
+            c_left  = c_x_z(:, interior_idxlr(1));
+            c_right = c_x_z(:, interior_idxlr(end));
+            c_x_z(:, x_nanl) = repmat(c_left , [1, sum(x_nanl)]);
+            c_x_z(:, x_nanr) = repmat(c_right, [1, sum(x_nanr)]);
+
+            % get the imaging scan
+            scan = self.scan;
+
+            % Get Receive Channel Data in the Frequency Domain
+            P_Rx_f = fftshift(fft(rxdata_h, nt, 1), 1);
+            [~, F, ~] = meshgrid(1:size(rxdata_h,2), f, 1:size(rxdata_h,3)); 
+            P_Rx_f = P_Rx_f .* exp(-1i*2*pi*F*time(1));
+            disp(length(xpos));
+            disp(size((P_Rx_f)));
+            rxdata_f = interp1(xpos, permute(P_Rx_f, [2,1,3]), x, 'nearest', 0);
+
+            % Only Keep Positive Frequencies within Transducer Passband
+            passband_f_idx = ((f > 3e6) & (f < 12e6));
+            rxdata_f = rxdata_f(:,passband_f_idx,:);
+            P_Tx_f = ones(size(f)); f = f(passband_f_idx); 
+            P_Tx_f = P_Tx_f(passband_f_idx); % Assume Flat Passband
+
+            % get the transmit delays and apodization
+            % (M is the transmit aperture, V is each transmit)
+            delay  = self.sequence.delays(self.tx); % M x V
+            apod = self.sequence.apodization(self.tx); % M x V
+            %disp(size(apod))
+            %disp(size(xpos))
+            %delay= self.sequence.dealays(self.tx);
+
+            M = size(delay,1);
+            V = size(delay,2);
+            delay = reshape(delay,M,V,1);
+            delay = permute(delay, [1,3,2]);
+            
+            MA = size(apod,1);
+            VA = size(apod,2);
+            apod = reshape(apod, MA,VA,1);
+            apod = permute(apod, [1,3,2]);
+
+            
+            %delayre = reshape(delay, )
+            %apod = permute(eye(no_rx_elements), [1,3,2]); % N x 1 x N
+            %delay = permute(zeros(no_rx_elements), [1,3,2]); % N x 1 x N
+            apod_x     = interp1(xpos, apod (:,:,tx_elmts), vec(x), 'nearest', 0); % X x 1 x M
+            delayIdeal = interp1(xpos, delay(:,:,tx_elmts), vec(x), 'nearest', 0); % X x 1 x M
+            txdata_f = (apod_x.*P_Tx_f).*exp(-1i*2*pi*delayIdeal.*f); % X x F x M
+            txdata_f = cast(txdata_f, 'like', rxdata_f); % match the data type
+
+            % shot gather mig
+             disp('Migrating ...'); tic;
+             img = shot_gather_mig_t(x, z, c_x_z, f, rxdata_f, txdata_f, aawin, 'version', kwargs.version, 'plot', kwargs.plot_updates);
+             disp('Done!_shotgather'); toc;
+          
+            % Generate Time-Gain Compensation From Center Frequency
+            f_ctr_idx = round(numel(f)/2);
+            
+            % get the propagated energy into the medium (at the center frequency)
+            disp('Migrating angular spectrum...'); tic;
+            tx_perFreq_x_z = angular_spectrum_t(...
+                x, z, c_x_z, f(f_ctr_idx), txdata_f(:,f_ctr_idx,:), aawin...
+                ); % Z x X x 1 x S
+            disp('Done! angular spectrum'); toc;
+            
+            
+            % get the sum over transmits, mean over frequencies (actually, just at the
+            % center frequency) for the whole image
+            tx_map = gather(mean(sum(tx_perFreq_x_z .* conj(tx_perFreq_x_z), 4),3)); % Z x X
+            
+            % Apply Time-Gain Compensation to Image
+            img_recon = img ./ (tx_map + kwargs.reg*max(tx_map(:)));
+            % get the data
+            b = img_recon;
+
         end
     end
     
