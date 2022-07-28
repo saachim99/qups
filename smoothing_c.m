@@ -46,6 +46,7 @@ for i = 1:numc-1
 end
 bigarray(alength,:) = [c2,z2];
 bigarrayimp(alength,:) = imp2;
+
 zn=0;
 
 end
