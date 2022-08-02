@@ -3063,7 +3063,7 @@ classdef UltrasoundSystem < handle
             kwargs.gpu = true;
             kwargs.version = 2;
             kwargs.plot = true;
-            kwargs.plot_updates = false;
+            kwargs.plot_updates = true;
             kwargs.parcluster = gcp('nocreate');
             % get cluster
             
@@ -3246,7 +3246,7 @@ classdef UltrasoundSystem < handle
             kwargs.gpu = true;
             kwargs.version = 2;
             kwargs.plot = true;
-            kwargs.plot_updates = false;
+            kwargs.plot_updates = true;
             
             % parse inputs
             for i = 1:2:numel(varargin), kwargs.(varargin{i}) = varargin{i+1}; end
@@ -3289,7 +3289,8 @@ classdef UltrasoundSystem < handle
                 rxdata_h = scat(:,:,tx_elmts);
                 disp('no here');
             end
-
+            
+            
             %scat_h = reshape(hilbert(reshape(scat,[nT,nRx*nTx])),[nT,nRx,nTx]);
             time = chd.time;
             fs = chd.fs; %#ok<PROPLC> 

@@ -8,7 +8,7 @@ arguments
     txdata_f
     aawin
     kwargs.version = 2
-    kwargs.plot (1,1) logical = false
+    kwargs.plot (1,1) logical = true
 end
 
 % Verify the Number of Common Shot Gathers
@@ -94,7 +94,7 @@ switch kwargs.version
             hax.Title.String = ['Image Reconstruction up to ', num2str(f(f_idx)/(1e6)), ' MHz'];
             drawnow limitrate;
             end, end
-            % M(f_idx) = getframe(hfig);
+             M(f_idx) = getframe(hfig);
         end
         % Save Accumulation of Image in Frequency Domain
         %movie2gif(M, 'FreqDomain.gif');
@@ -143,11 +143,15 @@ switch kwargs.version
 
             % update plot?
             if kwargs.plot
+              %  disp('we are in plot')
             him.CData(z_idx+1,:) = db(abs(img(z_idx+1,:)));
             caxis(hax, [-80, 0] + max(him.CData(:)));
             hax.Title.String = string(['Image Reconstruction up to ', num2str(z(z_idx+1)*1e3), ' mm']);
             drawnow limitrate;
-            % M{z_idx} = getframe(hfig);            
+            %imagesc(hfig);
+            
+            M{z_idx} = getframe(hfig);
+            N{z_idx} = M{z_idx}.cdata;
             end
 
         end
@@ -155,7 +159,10 @@ switch kwargs.version
         % img = img + sum(tx_singleFreq_x_z .* conj(rx_singleFreq_x_z), 3);
 
         % Save Accumulation of Image in Frequency Domain
-        %movie2gif(M, 'FreqDomain.gif');
+        movie2gif(M, 'FreqDomain.gif');
+       % movie2gif(N, 'FreqDomain_test.gif');
+        %movie(M,1,'limitrate');
+        %saveas(M);
 
 end
 

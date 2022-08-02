@@ -3,8 +3,8 @@ classdef Medium < handle
     properties(Access=public)
         c0 = 1540;          % reference speed of sound (m/s) - defaults to average sound speed in tissue
         rho0 = 1020;        % reference density (??/??) - defaults to some parameter thingy maybe?
-        BoA0 = 9;         % reference non-linearity - use 9 in tissue?
-        alpha0 = 0.5;       % reference power law absorption factor (dB/cm/MHz) - use 0.5 in tissue?
+        BoA0 = NaN;         % reference non-linearity - use 9 in tissue?
+        alpha0 = NaN;       % reference power law absorption factor (dB/cm/MHz) - use 0.5 in tissue?
         alphap0 = 1.01;     % global power law absorption exponent
                             % regions of alternate properties given in
                             % a cell array of perturbation regions. A 
@@ -96,7 +96,7 @@ classdef Medium < handle
             end
         end
 
-        % get properties mapBonA
+        % get properties map
         function [c, rho, BoA, alpha, alphap] = getPropertyMap(self, points)
             
             
@@ -118,10 +118,8 @@ classdef Medium < handle
                 for reg = 1:numel(self.pertreg)
                     if isa(self.pertreg{reg}, 'cell') && numel(self.pertreg{reg}) == 2 % this is a masked region
                         % get points within region
-                       
                         fun = self.pertreg{reg}{1};
-                        %disp(fun);
-                        %disp(fun(points));
+
                         ind = gather(fun(points));
                         
                         % modify the property
@@ -191,7 +189,7 @@ classdef Medium < handle
             % GETFULLWAVEMAP - Get Fullwave compatible map structure
             %
             % maps = getFullwaveMap(self, scan) returns a map sampled on
-            % the Scan scan.BonA
+            % the Scan scan.
             %
             % See also SCANCARTESIAN MEDIUM/PROPS
 
@@ -199,10 +197,10 @@ classdef Medium < handle
             [c, rho, BoA, alpha, ~] = props(self, scan);
 
             % set the map properties
-            n = 1 + BoA./2;
-            alpha(isnan(alpha)) = 0;
-            n(isnan(n)) = 0;
-            maps = struct('cmap', c, 'rmap', rho, 'amap', alpha, 'nmap', n);
+            eta = 1 + BoA./2;
+            maps = struct('cmap', c, 'rmap', rho, 'amap', alpha, 'nmap', eta);
+            maps.nmap(isnan(maps.nmap)) = 0; % set invalid non-linearity to 0
+            maps.amap(isnan(maps.amap)) = 0; % set invalid attenuation to 0
 
             % Use 0 for invalid properties in fullwave(?)
             for f = string(fieldnames(maps))', maps.(f) = nan2zero(maps.(f)); end
