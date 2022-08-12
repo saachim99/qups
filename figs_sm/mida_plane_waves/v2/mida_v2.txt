@@ -1,0 +1,4 @@
+tissueDensityPiece = flip(tissue_density_slice(326:440,125:224));
+soundSpeedPiece = flip(tissue_speed_slice(326:440,125:224));
+
+sound speed and density maps

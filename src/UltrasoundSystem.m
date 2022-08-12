@@ -2066,7 +2066,7 @@ classdef UltrasoundSystem < handle
                 %c = props(target, sscan, 'c'); % Z x X x Y
                 %dz = sscan.dz; 
                 kwargs.T = 2 * (vecnorm(range([sscan.xb; sscan.yb; sscan.zb], 2),2,1) ./ target.c0);
-                %kwargs.T = 1.25 * (vecnorm(range([sscan.xb; sscan.yb; sscan.zb], 2),2,1) ./ target.c0);
+                %kwargs.T = 1.7 * (vecnorm(range([sscan.xb; sscan.yb; sscan.zb], 2),2,1) ./ target.c0);
 
             end
             Nt = 1 + floor((kwargs.T / kgrid.dt) + max(range(t_tx,1))); % number of steps in time
@@ -2166,6 +2166,9 @@ classdef UltrasoundSystem < handle
 
                         % Process the simulation data
                         out{puls} = proc_fun(sensor_data) - proc_fun(sensor_data_iso); %#ok<PFBNS> data is small 
+
+                        %debugging
+                       % out{puls} = proc_fun(sensor_data); %#ok<PFBNS> data is small 
 
                         % report timing % TODO: make this part of some 'info' logger or something
                         fprintf('\nFinished pulse %i of %i\n', puls, Np);
@@ -3065,6 +3068,8 @@ classdef UltrasoundSystem < handle
             kwargs.plot = true;
             kwargs.plot_updates = true;
             kwargs.parcluster = gcp('nocreate');
+            kwargs.f = 7.5*(1e6);
+            
             % get cluster
             
             %if isempty(clu) || isa(chd.data, 'gpuArray'), clu = 0; end % run on CPU by default
@@ -3231,7 +3236,18 @@ classdef UltrasoundSystem < handle
         end
     
 
-        function b = bfWavefieldCorrelation(self, chd, medium, cscan, varargin)
+        %function [b,img, p_tx_curr_allz_ifft,p_rx_curr_allz_ifft] = bfWavefieldCorrelation(self, chd, medium, cscan, varargin)
+        function [output] = bfWavefieldCorrelation(self, chd, medium, cscan, varargin)
+
+            arguments
+                self UltrasoundSystem
+                chd ChannelData
+                medium Medium
+                cscan Scan
+            end
+            arguments(Repeating)
+                varargin
+            end
             % we assert that this is one transducer
             assert(self.tx == self.rx);
             xdc = self.xdc; 
@@ -3247,13 +3263,21 @@ classdef UltrasoundSystem < handle
             kwargs.version = 2;
             kwargs.plot = true;
             kwargs.plot_updates = true;
+            kwargs.f = 7.5*(1e6);
+            %kwargs.number = 1;
+
+      
             
             % parse inputs
             for i = 1:2:numel(varargin), kwargs.(varargin{i}) = varargin{i+1}; end
             
+            num_nu = kwargs.number;
+            disp(kwargs.number);
+            disp(num_nu);
             % anti-aliasing window
             aawin = kwargs.aawin;
-
+           
+            
             % get the transducer
             %xdc = self.xdc; 
             rxAptPos = xdc.positions();
@@ -3330,9 +3354,15 @@ classdef UltrasoundSystem < handle
             rxdata_f = interp1(xpos, permute(P_Rx_f, [2,1,3]), x, 'nearest', 0);
 
             % Only Keep Positive Frequencies within Transducer Passband
+            
             passband_f_idx = ((f > 3e6) & (f < 12e6));
+            % 1mhz
+            %passband_f_idx = ((f > 0));
+             %(f < 5e6));
+
             rxdata_f = rxdata_f(:,passband_f_idx,:);
-            P_Tx_f = ones(size(f)); f = f(passband_f_idx); 
+            P_Tx_f = ones(size(f)); 
+            f = f(passband_f_idx); 
             P_Tx_f = P_Tx_f(passband_f_idx); % Assume Flat Passband
 
             % get the transmit delays and apodization
@@ -3357,17 +3387,28 @@ classdef UltrasoundSystem < handle
             %delayre = reshape(delay, )
             %apod = permute(eye(no_rx_elements), [1,3,2]); % N x 1 x N
             %delay = permute(zeros(no_rx_elements), [1,3,2]); % N x 1 x N
-            apod_x     = interp1(xpos, apod (:,:,tx_elmts), vec(x), 'nearest', 0); % X x 1 x M
-            delayIdeal = interp1(xpos, delay(:,:,tx_elmts), vec(x), 'nearest', 0); % X x 1 x M
+            apod_x     = interp1(xpos, apod , vec(x), 'nearest', 0); % X x 1 x M
+            delayIdeal = interp1(xpos, delay, vec(x), 'nearest', 0); % X x 1 x M
             txdata_f = (apod_x.*P_Tx_f).*exp(-1i*2*pi*delayIdeal.*f); % X x F x M
             txdata_f = cast(txdata_f, 'like', rxdata_f); % match the data type
+            disp('displaying tx_data_h');
+            
+
+            disp(size(rxdata_h));
+            disp('displaying p_rx_f');
+            disp(size(rxdata_f));
+
+            disp(size((txdata_f)));
 
             % shot gather mig
              disp('Migrating ...'); tic;
              
-             img = shot_gather_mig_t(x, z, c_x_z, f, rxdata_f, txdata_f, aawin, 'version', kwargs.version, 'plot', kwargs.plot_updates);
+          %  [img, p_tx_curr_allz_ifft, p_rx_curr_allz_ifft] = shot_gather_mig_t(x, z, c_x_z, f, rxdata_f, txdata_f, aawin, 'version', kwargs.version, 'plot', kwargs.plot_updates);
              
-             
+            [img] = shot_gather_mig_t_nopx(x, z, c_x_z, f, rxdata_f, txdata_f, aawin, 'version', kwargs.version, 'plot', kwargs.plot_updates);
+
+            p_tx_curr_allz_ifft=0;
+            p_rx_curr_allz_ifft=0;
              %job = createJob(clu);
              %task = createTask(job, @shot_gather_mig_t,1,{x, z, c_x_z, f, rxdata_f, txdata_f, aawin, 'version', kwargs.version, 'plot', kwargs.plot_updates});
              %submit(job);
@@ -3393,6 +3434,18 @@ classdef UltrasoundSystem < handle
             img_recon = img ./ (tx_map + kwargs.reg*max(tx_map(:)));
             % get the data
             b = img_recon;
+
+            if num_nu ==1
+                output = b;
+            elseif num_nu == 2
+                 output = img;
+            elseif num_nu ==3
+                 output = p_tx_curr_allz_ifft;
+            elseif num_nu ==4
+                 output = p_rx_curr_allz_ifft;
+            else
+                output = 0;
+            end
 
         end
     end
