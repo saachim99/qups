@@ -2271,6 +2271,15 @@ classdef UltrasoundSystem < handle
             %   - X\Y\Z:    3D coordinates of the output
             %   - B:        B-mode image
             
+            arguments
+                self UltrasoundSystem
+                chd ChannelData
+                c0 
+            end
+            arguments(Repeating)
+                varargin
+            end
+
             % TODO: switch to using a struct kwargs to facilitate later
             % using the arguments blocks for R2020b+
             % default name-value pair arguments
@@ -2939,7 +2948,14 @@ classdef UltrasoundSystem < handle
             %               usage explodes on a parallel.ProcessPool.
             % 
             % See also DAS BFADJOINT CHANNELDATA/SAMPLE PARCLUSTER
-
+            arguments
+                self UltrasoundSystem
+                chd ChannelData
+                c0 
+            end
+            arguments(Repeating)
+                varargin
+            end
             % defaults
             kwargs.interp = 'linear';
             kwargs.parcluster = gcp('nocreate');
@@ -3237,11 +3253,11 @@ classdef UltrasoundSystem < handle
     
 
         %function [b,img, p_tx_curr_allz_ifft,p_rx_curr_allz_ifft] = bfWavefieldCorrelation(self, chd, medium, cscan, varargin)
-        function [output] = bfWavefieldCorrelation(self, chd, medium, cscan, varargin)
+        function [output] = bfWavefieldCorrelation(self, chd0, medium, cscan, varargin)
 
             arguments
                 self UltrasoundSystem
-                chd ChannelData
+                chd0 ChannelData
                 medium Medium
                 cscan Scan
             end
@@ -3252,7 +3268,7 @@ classdef UltrasoundSystem < handle
             assert(self.tx == self.rx);
             xdc = self.xdc; 
 
-
+            disp('in_wavefield')
             % defaults
             kwargs.aawin = 1;
             kwargs.dov = 45e-3; % Max Depth [m]
@@ -3276,7 +3292,15 @@ classdef UltrasoundSystem < handle
             disp(num_nu);
             % anti-aliasing window
             aawin = kwargs.aawin;
-           
+
+            chd = chd0;
+            chd = singleT(chd); % use less data
+            chd.data = chd.data - mean(chd.data, 1, 'omitnan'); % remove DC
+            D = chd.getPassbandFilter(xdc.bw, 25); % get a 25-tap passband filter for the transducer bandwidth
+            chd = filter(chd, D); % apply passband filter for transducer bandwidth
+            chd = gpuArray(chd);  % move data to GPU?
+            if isreal(chd), chd = hilbert(chd, 2^nextpow2(chd.T)); end % apply hilbert on real data
+
             
             % get the transducer
             %xdc = self.xdc; 
