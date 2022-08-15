@@ -4,15 +4,15 @@
 classdef Waveform < handle
     
     properties(GetAccess=public, SetAccess=public)
-        fun = @(t) sin(2*pi*5e6*t)  % functional form of the waveform
-        t0 = 0                      % start time
-        tend = 2 / 5e6              % end time
+        fun function_handle = @(t) sin(2*pi*5e6*t)  % functional form of the waveform
+        t0 (1,1) {mustBeNumeric} = -1 / 5e6         % start time
+        tend (1,1) {mustBeNumeric} = 1 / 5e6        % end time
     end
     
-    properties(GetAccess=public, SetAccess=protected)
+    properties(GetAccess=public, SetAccess=public)
         samples = []         % sampled form of the waveform
-        mode = 'fun'         % echo mode {*fun | samp}
-        dt = []              % time resolution in sampled mode
+        mode (1,1) string {mustBeMember(mode, ["fun", "samp"])} = 'fun'         % echo mode {*fun | samp}
+        dt {mustBeNumeric, mustBeScalarOrEmpty} = []              % time resolution in sampled mode
     end
     
     properties(Dependent)
@@ -151,18 +151,18 @@ classdef Waveform < handle
             if plot_freqs
                 h_time = subplot(2,1,1);
                 hp = plot(h_time, t, v, varargin{:});
-                xlabel('Time (s)');
+                xlabel('Time');
                 ylabel('Amplitude');
                 grid on;
                 
                 h_freq = subplot(2,1,2);
                 hp2 = plot(h_freq, k, w, varargin{:});
-                xlabel('Frequency (Hz)');
+                xlabel('Frequency');
                 ylabel('Amplitude');
                 grid on;
             else
                 hp = plot(axs, t, v, varargin{:});
-                xlabel(axs, 'Time (s)');
+                xlabel(axs, 'Time');
                 ylabel(axs, 'Amplitude');
                 grid on;
             end
@@ -181,6 +181,29 @@ classdef Waveform < handle
                     params = [params(:)', {'samples'}, {self.samples}];
             end
             w = Waveform(params{:});
+        end
+
+        function wv = scale(self, kwargs)
+            arguments
+                self Waveform
+                kwargs.time (1,1) double
+            end
+            % create a new waveform object with the properties scaled
+            w = kwargs.time; % factor
+            f = self.fun; % function
+            if self.mode == "fun"
+                wv = Waveform( ...
+                    't0', w * self.t0, 'tend', w * self.tend, ...
+                    'fun', @(t) f(t./w) ...
+                    );
+            elseif self.mode == "samp"
+                wv = Waveform( ...
+                    't0', w * self.t0, 'tend', w * self.tend, ...
+                    'dt', w * self.dt ...
+                    );
+            else 
+                error('Undefined state.')
+            end
         end
         
         function s = sample(self, t)
@@ -276,20 +299,13 @@ classdef Waveform < handle
             end
             self.samples = samples;
             self.mode = 'samp';
-            self.fun = [];
+            self.fun = @(t) interp1(self.samples, 1 + (t - self.t0) * fs, "cubic", 0);
         end        
     end    
     
     methods
         function dur = get.duration(self), dur = self.tend - self.t0; end
-        function t = get.time(self)
-            switch self.mode
-                case 'samp'
-                    t = self.getSampleTimes();
-                case 'fun'
-                    t = [];
-            end
-        end
+        function t = get.time(self), t = self.getSampleTimes(); end
     end
 
     methods(Static)

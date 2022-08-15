@@ -87,6 +87,39 @@ classdef ChannelData < matlab.mixin.Copyable
                 'data', self.data(:,:,:,:) ... limit to 4 dimensions
                 );
         end
+    
+        % scaling
+        function chd = scale(chd, kwargs)
+            % SCALE - Scale units
+            %
+            % chd = SCALE(chd, 'time', factor) scales the temporal
+            % properties by factor. This simultaneously converts in time 
+            % and in frequency, for example from seconds to microseconds 
+            % and hertz to megahertz.
+            %
+            % Example:
+            %
+            % % Create a ChannelData object
+            % chd = ChannelData('data', rand(2^8), 'fs', 1e6, 't0', -5e-6); % s, Hz
+            %
+            % % convert from hertz to megahertz
+            % chd = scale(chd, 'time', 1e6); % us, MHz
+            % chd.fs
+            % chd.t0
+            %
+
+            arguments
+                chd ChannelData
+                kwargs.time (1,1) double
+            end
+            chd = copy(chd);
+            if isfield(kwargs, 'time')
+                w = kwargs.time;
+                % scale time (e.g. s -> us / Hz -> MHz)
+                [chd.fs, chd.t0] = deal(chd.fs/w, w*chd.t0);
+            end
+        end
+
     end
 
     % helper functions
@@ -450,6 +483,7 @@ classdef ChannelData < matlab.mixin.Copyable
             assert(A >= 0 && B >= 0, 'Data append or prepend size must be positive.');
 
             chd = copy(chd); % copy semantics
+            if A == 0 && B == 0, return; end % short circuit
             % chd.data(end+(B+A),:) = 0; % append A + B zeros in time to the data
             s = repmat({':'}, [1,gather(ndims(chd.data))]); % splice in all other dimensions
             s{chd.tdim} = chd.T + (1:(B+A)); % expand by B+A in time dimension
@@ -877,17 +911,16 @@ classdef ChannelData < matlab.mixin.Copyable
         function chd = sub(chd, ind, dim)
             if ~iscell(ind), ind = {ind}; end % enforce cell syntax
             tind = ind; % separate copy for the time indices
-            tind(size(chd.time,dim) == 1) = {1}; % set singleton
-            has_tdim = any(dim == chd.tdim);
+            tind(size(chd.time,dim) == 1) = {1}; % set singleton where t0 is sliced
+            has_tdim = any(dim == chd.tdim); % whether we are idnexing in the time dimension too
             if has_tdim, 
                 n = tind{dim == chd.tdim}; % get the time indices
                 assert(issorted(n, 'strictascend') && all(n == round(n)), ... % check the index in time is sorted, continous
                     'The temporal index must be a strictly increasing set of indices.');
             end
-            if has_tdim, t = chd.time; else, t = chd.t0; end % index in time if necessary
-            t0_   = sub(t, tind, dim); % extract
-            data_ = sub(chd.data, ind, dim); % extract
-            if has_tdim, t0_ = sub(t0_, 1, chd.tdim); end % extract only the first value in time
+            t0_   = sub(chd.t0, tind(dim ~= chd.tdim), dim(dim ~= chd.tdim)); % extract start time
+            data_ = sub(chd.data, ind, dim); % extract data
+            if has_tdim, t0_ = t0_ + (n(1) - 1) / chd.fs; end % get the new start time based on the starting index
             
             chd = copy(chd); % copy semantics
             chd.t0 = t0_; % assign

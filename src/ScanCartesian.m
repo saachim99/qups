@@ -75,6 +75,19 @@ classdef ScanCartesian < Scan
             % See also SETIMAGINGGRID
             [self.xb, self.yb, self.zb] = deal(x, y, z);
         end
+        % scaling
+        function self = scale(self, kwargs)
+            arguments
+                self ScanCartesian
+                kwargs.dist (1,1) double
+            end
+            self = copy(self);
+            if isfield(kwargs, 'dist')
+                w = kwargs.dist;
+                % scale distance (e.g. m -> mm)
+                [self.x, self.y, self.z] = deal(w*self.x, w*self.y, w*self.z);
+            end
+        end
     end
 
     % USTB interface methods
@@ -126,7 +139,11 @@ classdef ScanCartesian < Scan
 
     % imaging computations
     methods
-        function [X, Y, Z, sz] = getImagingGrid(self)
+        function [X, Y, Z, sz] = getImagingGrid(self, kwargs)
+            arguments
+                self ScanCartesian
+                kwargs.vector (1,1) logical = false; 
+            end
             ord = self.getPermuteOrder(); % get order of variables
             iord = arrayfun(@(o) find(o == ord), [1,2,3]); % inverse ordering of variables
             grid = {self.x, self.y, self.z}; % get axis
@@ -135,8 +152,14 @@ classdef ScanCartesian < Scan
             grid = grid(iord); % undo reorder
             [X, Y, Z] = deal(grid{:}); % send to variables
             sz = self.size; % output image size
-            assert(all(size(X,1:3) == sz), 'Internal error: size mismatch.') %#ok<CPROP> 
-            if nargout == 1, X = {X, Y, Z}; end % pack if 1 output requested
+            assert(all(size(X,1:3) == sz), 'Internal error: size mismatch.') %#ok<CPROPLC,CPROP> 
+            if nargout == 1
+                if kwargs.vector
+                    X = cellfun(@(x) {shiftdim(x,-1)}, {X, Y, Z}); X = cat(1, X{:}); % return 3 x perm(X x Y x Z) NDarray
+                else
+                    X = {X, Y, Z}; % return (1 x 3) cell array 
+                end
+            end % pack if 1 output requested
         end
                 
         function setImageGridOnTarget(self, target, margin)

@@ -50,6 +50,15 @@ classdef Scan < matlab.mixin.Copyable
         % G = GETIMAGINGGRID(self) returns the X/Y/Z arrays in a 1 x 3
         % cell (as in G = {X, Y, Z}).
         %
+        % P = GETIMAGINGGRID(self, 'vector', true) returns an NDarray whos
+        % first dimension is a vector in X,Y,Z order and with the image
+        % dimensions raised by one i.e. the following are true:
+        %
+        % * isequal(size(P)   , [3, self.size])
+        % * isequal(P(1,:,:,:), shiftdim(X,-1))
+        % * isequal(P(2,:,:,:), shiftdim(Y,-1))
+        % * isequal(P(3,:,:,:), shiftdim(Z,-1))
+        %
         % The dimension of change for each variable is given by the
         % 'order' property of the Scan
         %
@@ -77,6 +86,24 @@ classdef Scan < matlab.mixin.Copyable
         %               imaging grid
         setImageGridOnTarget(self, target, margin)
 
+
+        % SCALE - Scale units
+        %
+        % scan = SCALE(scan, 'dist', factor) scales the distance of the
+        % properties by factor. This can be used to convert from meters to
+        % millimeters for example.
+        %
+        % Example:
+        %
+        % % Create a scan
+        % scan = ScanCartesian('xb', [-2e-3, 2e-3]); % in meters
+        %
+        % % convert from meters to millimeters
+        % scan = scale(scan, 'dist', 1e3); % in millimeters
+        % scan.xb
+        %
+        % 
+        scale(self, kwargs)
     end
 
 

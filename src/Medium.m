@@ -119,7 +119,6 @@ classdef Medium < handle
                     if isa(self.pertreg{reg}, 'cell') && numel(self.pertreg{reg}) == 2 % this is a masked region
                         % get points within region
                         fun = self.pertreg{reg}{1};
-
                         ind = gather(fun(points));
                         
                         % modify the property
@@ -137,7 +136,7 @@ classdef Medium < handle
                         % MATLAB does not promise the number of outputs,
                         % nor provide a convenient way of figuring that out
                         % from the function handle itself, so we just try 
-                        % up to 5 until we get it right
+                        % 5 or less until we get it right
                         for nfout = 5:-1:1
                             out = cell(1, nfout);
                             try
