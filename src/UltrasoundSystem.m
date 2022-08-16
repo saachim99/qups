@@ -2142,10 +2142,9 @@ classdef UltrasoundSystem < matlab.mixin.Copyable
                 kgrid.total_grid_points, kgrid.total_grid_points*4/2^20);
 
             % strip all other arguments from input
-            nonkwfields = {'T', 'PML','CFL_max', 'parcluster', 'ElemMapMethod', 'el_sub_div', ... % not kWave args
-                 'BLIType', 'BLITolerance','UpsamplingRate', 'czarray','arrayofimp' ... % not kspaceFirstOrder args
-                }; 
-            kwave_args = rmfield(kwargs, nonkwfields); % forward all others
+            nonkwfields = {'czarray','arrayofimp' }; % not kspaceFirstOrder args
+                
+            kwave_args = rmfield(kwave_args, nonkwfields); % forward all others
             
             % set global arguments: these are always overridden
             kwave_args.PMLInside = false;
@@ -3428,7 +3427,7 @@ classdef UltrasoundSystem < matlab.mixin.Copyable
             else
                 f = [self.tx.fc, self.rx.fc];
             end
-        endWavefield
+        end
         function set.fc(self, f)
             if self.rx == self.tx
                 self.rx.setCentralFrequency(f);

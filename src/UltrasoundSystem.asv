@@ -3428,7 +3428,7 @@ classdef UltrasoundSystem < matlab.mixin.Copyable
             else
                 f = [self.tx.fc, self.rx.fc];
             end
-        endWavefield
+        end
         function set.fc(self, f)
             if self.rx == self.tx
                 self.rx.setCentralFrequency(f);

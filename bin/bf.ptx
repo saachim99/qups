@@ -1020,17 +1020,16 @@ $L__BB0_104:
 	ret;
 
 }
-	// .globl	_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS_
-.visible .entry _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS_(
-	.param .u64 _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_0,
-	.param .u64 _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_1,
-	.param .u64 _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_2,
-	.param .u64 _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_3,
-	.param .u64 _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_4,
-	.param .u64 _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_5,
-	.param .u64 _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_6,
-	.param .u32 _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_7,
-	.param .align 4 .b8 _Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_8[4]
+	// .globl	_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i
+.visible .entry _Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i(
+	.param .u64 _Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_0,
+	.param .u64 _Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_1,
+	.param .u64 _Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_2,
+	.param .u64 _Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_3,
+	.param .u64 _Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_4,
+	.param .u64 _Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_5,
+	.param .u64 _Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_6,
+	.param .u32 _Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_7
 )
 {
 	.local .align 4 .b8 	__local_depot1[4];
@@ -1046,13 +1045,13 @@ $L__BB0_104:
 
 	mov.u64 	%SPL, __local_depot1;
 	cvta.local.u64 	%SP, %SPL;
-	ld.param.u64 	%rd63, [_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_1];
-	ld.param.u64 	%rd64, [_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_2];
-	ld.param.u64 	%rd65, [_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_3];
-	ld.param.u64 	%rd68, [_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_4];
-	ld.param.u64 	%rd66, [_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_5];
-	ld.param.u64 	%rd67, [_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_6];
-	ld.param.u32 	%r23, [_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_7];
+	ld.param.u64 	%rd63, [_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_1];
+	ld.param.u64 	%rd64, [_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_2];
+	ld.param.u64 	%rd65, [_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_3];
+	ld.param.u64 	%rd68, [_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_4];
+	ld.param.u64 	%rd66, [_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_5];
+	ld.param.u64 	%rd67, [_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_6];
+	ld.param.u32 	%r23, [_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_7];
 	cvta.to.global.u64 	%rd1, %rd68;
 	cvta.to.global.u64 	%rd2, %rd64;
 	mov.u32 	%r25, 0;
@@ -1346,7 +1345,7 @@ $L__BB1_113:
 	setp.lt.s32 	%p77, %r22, 0;
 	@%p77 bra 	$L__BB1_115;
 
-	ld.param.u64 	%rd159, [_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_2];
+	ld.param.u64 	%rd159, [_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_2];
 	cvt.s64.s32 	%rd140, %r22;
 	setp.gt.u64 	%p78, %rd7, %rd140;
 	add.s64 	%rd141, %rd58, %rd140;
@@ -2177,7 +2176,7 @@ $L__BB1_110:
 	mov.b32 	{%rs139, %rs140}, %r108;
 
 $L__BB1_116:
-	ld.param.u64 	%rd150, [_Z14wsinterpd_tempP7ushort2PKS_S2_PKtPKmS6_S6_iS__param_0];
+	ld.param.u64 	%rd150, [_Z10wsinterpdhP7ushort2PKS_S2_PKtPKmS6_S6_i_param_0];
 	ld.const.u64 	%rd149, [QUPS_F];
 	shl.b64 	%rd146, %rd171, 2;
 	add.s64 	%rd147, %rd23, %rd146;
